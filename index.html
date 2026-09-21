@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Uncle Laundry – Wäsche abholen und zurückbringen lassen</title>
+<meta name="description" content="Wäsche bestellen: Wir holen ab, waschen und bringen alles zurück.">
+<style>
+  :root {
+    --indigo: #1c2b5a;
+    --ink: #16223f;
+    --paper: #f5f8fd;
+    --white: #ffffff;
+    --sky: #dce7f7;
+    --line: #bccbe3;
+    --tag: #f4c84a;
+    --muted: #4f5d7a;
+    --danger: #b3261e;
+    --focus: #0b57d0;
+    --slab: Rockwell, "Rockwell Nova", "Roboto Slab", Georgia, "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color-scheme: light;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  html { -webkit-text-size-adjust: 100%; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+
+  body {
+    margin: 0;
+    padding-bottom: 96px;
+    background: var(--paper);
+    color: var(--ink);
+    font: 400 1rem/1.5 var(--sans);
+  }
+  @media (min-width: 900px) { body { padding-bottom: 0; } }
+
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  /* Matratzenstreifen als einziges Dekor */
+  .ticking {
+    height: 14px;
+    background: repeating-linear-gradient(90deg, var(--indigo) 0 10px, var(--white) 10px 20px);
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+  .site-head { padding: 18px 0 4px; }
+  .brand { font: 700 1.25rem var(--slab); color: var(--indigo); letter-spacing: .01em; }
+
+  .hero { padding: 28px 0 12px; }
+  .hero h1 {
+    margin: 0 0 14px;
+    max-width: 18ch;
+    font: 700 clamp(2rem, 5.4vw, 3.2rem)/1.08 var(--slab);
+    color: var(--indigo);
+  }
+  .hero p { margin: 0; max-width: 52ch; color: var(--muted); font-size: 1.1rem; }
+
+  .layout { display: grid; gap: 12px; padding-bottom: 56px; }
+  @media (min-width: 900px) {
+    .layout { grid-template-columns: minmax(0, 1fr) 360px; gap: 56px; align-items: start; }
+    .ticket-wrap { position: sticky; top: 24px; }
+  }
+
+  /* Formularabschnitte */
+  .block { padding: 26px 0 20px; border-top: 2px solid var(--indigo); }
+  .block h2 { margin: 0 0 6px; font: 700 1.35rem var(--slab); color: var(--indigo); }
+  .block > .lead { margin: 0 0 18px; color: var(--muted); max-width: 60ch; }
+
+  .grid { display: grid; gap: 16px; }
+  @media (min-width: 560px) {
+    .grid.two { grid-template-columns: 1fr 1fr; }
+    .grid .span2 { grid-column: 1 / -1; }
+    .grid.plzort { grid-template-columns: 140px 1fr; }
+  }
+
+  label, .label { display: block; margin: 0 0 6px; font-weight: 600; }
+  .opt { font-weight: 400; color: var(--muted); }
+
+  input, select, textarea {
+    width: 100%;
+    min-height: 48px;
+    padding: 11px 14px;
+    font: inherit;
+    color: var(--ink);
+    background: var(--white);
+    border: 1.5px solid var(--line);
+    border-radius: 6px;
+  }
+  textarea { min-height: 96px; resize: vertical; }
+  input:hover, select:hover, textarea:hover { border-color: var(--indigo); }
+  [aria-invalid="true"] { border-color: var(--danger); border-width: 2px; }
+  .err { margin: 6px 0 0; color: var(--danger); font-size: .95rem; font-weight: 500; }
+
+  /* Leistungen */
+  .services { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .svc {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px;
+    padding: 14px 16px;
+    background: var(--white);
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+  }
+  .svc.on { border-color: var(--indigo); box-shadow: inset 6px 0 0 var(--tag); padding-left: 22px; }
+  .svc-info { flex: 1 1 220px; display: grid; gap: 2px; min-width: 0; }
+  .svc-name { font-weight: 700; }
+  .svc-price { font-family: var(--slab); color: var(--indigo); }
+  .svc-desc { color: var(--muted); font-size: .95rem; }
+
+  .stepper { display: flex; align-items: center; gap: 6px; flex: none; }
+  .stepper button {
+    width: 44px; height: 44px; padding: 0;
+    font: 400 1.5rem/1 var(--sans); color: var(--indigo);
+    background: var(--white);
+    border: 1.5px solid var(--indigo); border-radius: 6px;
+    cursor: pointer;
+  }
+  .stepper button:hover { background: var(--sky); }
+  .stepper input {
+    width: 56px; min-height: 44px; padding: 0 4px;
+    text-align: center; font-weight: 700; font-size: 1.1rem;
+    -moz-appearance: textfield; appearance: textfield;
+  }
+  .stepper input::-webkit-outer-spin-button,
+  .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .unit { min-width: 44px; color: var(--muted); }
+
+  .info-line { margin: 12px 0 0; padding: 10px 14px; background: var(--sky); border-radius: 6px; color: var(--ink); }
+
+  /* Wäschezettel */
+  .ticket-wrap { margin-top: 8px; }
+  .ticket {
+    position: relative;
+    background: var(--white);
+    border: 1.5px solid var(--indigo);
+    border-radius: 10px;
+    box-shadow: 7px 7px 0 var(--sky);
+  }
+  .ticket-head {
+    position: relative;
+    padding: 16px 22px 14px 58px;
+    background: var(--tag);
+    border-bottom: 1.5px solid var(--indigo);
+    border-radius: 8px 8px 0 0;
+  }
+  .ticket-head::before {
+    content: "";
+    position: absolute; left: 20px; top: 50%;
+    width: 18px; height: 18px; margin-top: -9px;
+    background: var(--paper);
+    border: 1.5px solid var(--indigo);
+    border-radius: 50%;
+  }
+  .ticket-head h2 { margin: 0; font: 700 1.4rem var(--slab); color: var(--ink); }
+  .ticket-head p { margin: 0; font-size: .92rem; color: var(--ink); }
+  .ticket-body { padding: 20px 22px 6px; }
+
+  .empty { margin: 0 0 14px; color: var(--muted); }
+  .lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .lines li { display: flex; align-items: baseline; gap: 8px; }
+  .lines .dots { flex: 1; min-width: 12px; border-bottom: 2px dotted var(--line); transform: translateY(-4px); }
+  .lines .price { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .total {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    margin-top: 16px; padding-top: 14px; border-top: 2px solid var(--indigo);
+  }
+  .total .sum { font: 700 2rem var(--slab); font-variant-numeric: tabular-nums; }
+  .note { margin: 6px 0 0; color: var(--muted); font-size: .9rem; }
+
+  .facts { margin: 16px 0 0; display: grid; gap: 10px; }
+  .facts div { display: grid; gap: 0; }
+  .facts dt { font-size: .9rem; color: var(--muted); }
+  .facts dd { margin: 0; font-weight: 600; }
+
+  .perf { position: relative; margin: 20px -22px 0; border-top: 2px dashed var(--line); }
+  .perf::before, .perf::after {
+    content: ""; position: absolute; top: -12px;
+    width: 22px; height: 22px;
+    background: var(--paper);
+    border: 1.5px solid var(--indigo); border-radius: 50%;
+  }
+  .perf::before { left: -11px; clip-path: inset(0 0 0 50%); }
+  .perf::after { right: -11px; clip-path: inset(0 50% 0 0); }
+
+  .ticket-actions { padding: 18px 22px 22px; display: grid; gap: 10px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 48px; padding: 0 18px;
+    font: 600 1rem var(--sans);
+    border: 2px solid var(--indigo); border-radius: 6px;
+    cursor: pointer; text-align: center;
+  }
+  .btn.primary { background: var(--indigo); color: var(--white); }
+  .btn.primary:hover { background: #26397a; }
+  .btn.secondary { background: var(--white); color: var(--indigo); }
+  .btn.secondary:hover { background: var(--sky); }
+  .btn.plain { border-color: transparent; background: transparent; color: var(--indigo); text-decoration: underline; text-underline-offset: 3px; }
+  .btn.plain:hover { background: var(--sky); }
+
+  .status { margin: 0; padding: 10px 12px; background: var(--sky); border-radius: 6px; font-size: .95rem; }
+  .setup { margin: 0; padding: 10px 12px; border: 1.5px dashed var(--danger); border-radius: 6px; font-size: .9rem; color: var(--danger); }
+
+  /* Leiste am unteren Rand (nur Smartphone) */
+  .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--indigo); color: var(--white);
+  }
+  .bar .bar-label { display: block; font-size: .85rem; opacity: .85; }
+  .bar .bar-sum { font: 700 1.3rem var(--slab); font-variant-numeric: tabular-nums; }
+  .bar .btn { background: var(--tag); border-color: var(--tag); color: var(--ink); }
+  .bar .btn:hover { background: #f8d878; }
+  .bar.off { display: none; }
+  @media (min-width: 900px) { .bar { display: none; } }
+
+  .site-foot { padding: 24px 0 40px; color: var(--muted); font-size: .9rem; border-top: 2px solid var(--indigo); }
+
+  noscript p { padding: 16px; background: var(--tag); margin: 0; }
+</style>
+</head>
+<body>
+<noscript><p>Diese Seite braucht JavaScript, damit du deine Bestellung zusammenstellen kannst.</p></noscript>
+
+<div class="ticking" aria-hidden="true"></div>
+
+<div class="wrap">
+  <header class="site-head"><span class="brand" id="brand">Uncle Laundry</span></header>
+
+  <section class="hero" aria-labelledby="h1">
+    <h1 id="h1">Wäsche abgeben, ohne das Haus zu verlassen.</h1>
+    <p>Du stellst deine Bestellung zusammen. Wir holen die Wäsche ab, waschen sie und bringen alles zurück.</p>
+  </section>
+
+  <main class="layout">
+    <form id="order" novalidate autocomplete="on">
+
+      <section class="block" aria-labelledby="h-leistungen">
+        <h2 id="h-leistungen">Was sollen wir waschen?</h2>
+        <p class="lead">Schätze die Menge grob. Du kannst sie unten im Wäschezettel jederzeit ändern.</p>
+        <ul class="services" id="services"></ul>
+        <p class="err" id="err-services" role="alert" hidden></p>
+      </section>
+
+      <section class="block" aria-labelledby="h-adresse">
+        <h2 id="h-adresse">Wo holen wir ab?</h2>
+        <div class="grid two">
+          <div>
+            <label for="name">Name</label>
+            <input id="name" type="text" autocomplete="name" required>
+            <p class="err" id="err-name" hidden></p>
+          </div>
+          <div>
+            <label for="telefon">Telefon</label>
+            <input id="telefon" type="tel" autocomplete="tel" required>
+            <p class="err" id="err-telefon" hidden></p>
+          </div>
+          <div class="span2">
+            <label for="email">E-Mail <span class="opt">(optional)</span></label>
+            <input id="email" type="email" autocomplete="email">
+            <p class="err" id="err-email" hidden></p>
+          </div>
+          <div class="span2">
+            <label for="strasse">Straße und Hausnummer</label>
+            <input id="strasse" type="text" autocomplete="address-line1" required>
+            <p class="err" id="err-strasse" hidden></p>
+          </div>
+          <div class="span2 grid plzort">
+            <div>
+              <label for="plz">PLZ</label>
+              <input id="plz" type="text" inputmode="numeric" maxlength="5" autocomplete="postal-code" required>
+              <p class="err" id="err-plz" hidden></p>
+            </div>
+            <div>
+              <label for="ort">Ort</label>
+              <input id="ort" type="text" autocomplete="address-level2" required>
+              <p class="err" id="err-ort" hidden></p>
+            </div>
+          </div>
+          <div class="span2">
+            <label for="zusatz">Etage, Klingelschild <span class="opt">(optional)</span></label>
+            <input id="zusatz" type="text">
+          </div>
+        </div>
+      </section>
+
+      <section class="block" aria-labelledby="h-termin">
+        <h2 id="h-termin">Wann passt es dir?</h2>
+        <div class="grid two">
+          <div class="span2">
+            <label for="datum">Abholung am</label>
+            <input id="datum" type="date" required>
+            <p class="err" id="err-datum" hidden></p>
+          </div>
+          <div>
+            <label for="zeit-abholung">Zeitfenster Abholung</label>
+            <select id="zeit-abholung" required></select>
+            <p class="err" id="err-zeit-abholung" hidden></p>
+          </div>
+          <div>
+            <label for="zeit-rueckgabe">Zeitfenster Rückgabe</label>
+            <select id="zeit-rueckgabe" required></select>
+            <p class="err" id="err-zeit-rueckgabe" hidden></p>
+          </div>
+        </div>
+        <p class="info-line" id="rueckgabe-info" aria-live="polite"></p>
+      </section>
+
+      <section class="block" aria-labelledby="h-hinweise">
+        <h2 id="h-hinweise">Sollen wir etwas beachten?</h2>
+        <label for="hinweise" class="opt">Zum Beispiel Flecken, empfindliche Haut oder wohin wir die Wäsche zurückbringen sollen.</label>
+        <textarea id="hinweise"></textarea>
+      </section>
+    </form>
+
+    <aside class="ticket-wrap" aria-label="Deine Bestellung">
+      <div class="ticket" id="ticket">
+        <div class="ticket-head">
+          <h2>Wäschezettel</h2>
+          <p>Deine Bestellung, vorläufig berechnet</p>
+        </div>
+        <div class="ticket-body">
+          <div id="ticket-lines" aria-live="polite"></div>
+          <div class="total">
+            <span>Vorläufige Summe</span>
+            <span class="sum" id="ticket-total">0,00&nbsp;€</span>
+          </div>
+          <p class="note" id="ticket-note"></p>
+          <dl class="facts">
+            <div><dt>Abholung</dt><dd id="fact-abholung">noch offen</dd></div>
+            <div><dt>Rückgabe</dt><dd id="fact-rueckgabe">noch offen</dd></div>
+          </dl>
+          <div class="perf" aria-hidden="true"></div>
+        </div>
+        <div class="ticket-actions">
+          <button type="button" class="btn primary" id="btn-wa">Per WhatsApp bestellen</button>
+          <button type="button" class="btn secondary" id="btn-mail">Per E-Mail bestellen</button>
+          <button type="button" class="btn plain" id="btn-copy">Bestellung als Text kopieren</button>
+          <p class="status" id="status" role="status" hidden></p>
+          <p class="setup" id="setup-hint" hidden>Einrichtung: Trage in der Datei index.html unter CONFIG eine WhatsApp-Nummer oder eine E-Mail-Adresse ein. Danach erscheinen hier die Buttons zum Bestellen.</p>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="site-foot">Uncle Laundry</footer>
+</div>
+
+<div class="bar" id="bar">
+  <div>
+    <span class="bar-label">Vorläufige Summe</span>
+    <span class="bar-sum" id="bar-total">0,00&nbsp;€</span>
+  </div>
+  <button type="button" class="btn" id="bar-go">Zum Wäschezettel</button>
+</div>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------
+   EINSTELLUNGEN – hier änderst du Preise, Zeiten und Kontaktdaten.
+   Preise stehen in Cent (350 = 3,50 €).
+   ------------------------------------------------------------------ */
+const CONFIG = {
+  name: "Uncle Laundry",
+
+  // Wohin die Bestellung geschickt wird. Mindestens eines von beiden ausfüllen.
+  whatsapp: "",   // Ländervorwahl + Nummer, nur Ziffern, z. B. "491701234567"
+  email: "",      // z. B. "bestellung@deine-domain.de"
+
+  mindestbestellwertCent: 2000,
+  abholgebuehrCent: 390,               // wird berechnet, solange der Warenwert darunter liegt
+  abholgebuehrEntfaelltAbCent: 3500,   // ab diesem Warenwert kostenlos
+  rueckgabeNachTagen: 2,               // frühester Rückgabetag nach der Abholung
+  sonntagsGeschlossen: true,
+  plzPraefixe: [],                     // z. B. ["44"] für Postleitzahlen ab 44…; leer = keine Einschränkung
+  preisHinweis: "Der Endpreis richtet sich nach der tatsächlich abgegebenen Menge.",
+
+  zeitfenster: ["08–10 Uhr", "10–12 Uhr", "12–14 Uhr", "14–16 Uhr", "16–18 Uhr", "18–20 Uhr"],
+
+  // Beispielpreise – bitte durch deine echten Preise ersetzen.
+  leistungen: [
+    { id: "wt",  name: "Waschen & Trocknen",          beschreibung: "Alltagswäsche, gewaschen und getrocknet.",           preisCent: 350, pro: "pro kg",    einheit: "kg" },
+    { id: "wtf", name: "Waschen, Trocknen & Falten",  beschreibung: "Alltagswäsche, gewaschen, getrocknet und gefaltet.", preisCent: 490, pro: "pro kg",    einheit: "kg" },
+    { id: "hem", name: "Hemden & Blusen",             beschreibung: "Gewaschen und gebügelt.",                            preisCent: 320, pro: "pro Stück", einheit: "Stück" },
+    { id: "bet", name: "Bettwäsche-Set",              beschreibung: "Bettbezug plus Kissenbezüge, gewaschen und getrocknet.", preisCent: 750, pro: "pro Set", einheit: "Set" }
+  ]
+};
+
+/* ------------------------------------------------------------------ */
+
+const $  = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const eurFmt = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
+const eur = cents => eurFmt.format(cents / 100);
+const val = id => $("#" + id).value.trim();
+
+const qty = {};
+CONFIG.leistungen.forEach(l => { qty[l.id] = 0; });
+
+/* ---------- Datum ---------- */
+function isoLocal(d) {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+function parseDate(v) {
+  if (!v) return null;
+  const [y, m, d] = v.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+function returnDate(pick) {
+  const d = new Date(pick);
+  d.setDate(d.getDate() + CONFIG.rueckgabeNachTagen);
+  if (CONFIG.sonntagsGeschlossen && d.getDay() === 0) d.setDate(d.getDate() + 1);
+  return d;
+}
+const fmtLong  = d => d.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" });
+const fmtShort = d => d.toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
+
+const tomorrow = new Date();
+tomorrow.setHours(0, 0, 0, 0);
+tomorrow.setDate(tomorrow.getDate() + 1);
+
+/* ---------- Aufbau ---------- */
+function buildServices() {
+  $("#services").innerHTML = CONFIG.leistungen.map(l => `
+    <li class="svc" data-id="${esc(l.id)}">
+      <div class="svc-info">
+        <span class="svc-name">${esc(l.name)}</span>
+        <span class="svc-price">${eur(l.preisCent)} ${esc(l.pro)}</span>
+        <span class="svc-desc">${esc(l.beschreibung)}</span>
+      </div>
+      <div class="stepper" role="group" aria-label="Menge: ${esc(l.name)}">
+        <button type="button" data-step="-1" aria-label="Weniger: ${esc(l.name)}">&minus;</button>
+        <input type="number" inputmode="numeric" min="0" max="99" step="1" value="0"
+               data-qty="${esc(l.id)}" aria-label="Menge in ${esc(l.einheit)}: ${esc(l.name)}">
+        <button type="button" data-step="1" aria-label="Mehr: ${esc(l.name)}">+</button>
+        <span class="unit" aria-hidden="true">${esc(l.einheit)}</span>
+      </div>
+    </li>`).join("");
+}
+
+function fillSelect(id, options) {
+  $("#" + id).innerHTML =
+    `<option value="">Bitte wählen</option>` +
+    options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+}
+
+/* ---------- Rechnen ---------- */
+function calc() {
+  const lines = CONFIG.leistungen
+    .filter(l => qty[l.id] > 0)
+    .map(l => ({ l, n: qty[l.id], sum: qty[l.id] * l.preisCent }));
+  const sub = lines.reduce((a, x) => a + x.sum, 0);
+  const fee = sub > 0 && sub < CONFIG.abholgebuehrEntfaelltAbCent ? CONFIG.abholgebuehrCent : 0;
+  return { lines, sub, fee, total: sub + fee };
+}
+
+function setQty(id, n, writeBack = true) {
+  const clean = Math.min(99, Math.max(0, Number.isFinite(n) ? Math.floor(n) : 0));
+  qty[id] = clean;
+  const li = $(`.svc[data-id="${CSS.escape(id)}"]`);
+  li.classList.toggle("on", clean > 0);
+  if (writeBack) $("input", li).value = clean;
+  clearErr("services");
+  render();
+}
+
+/* ---------- Anzeige ---------- */
+function render() {
+  const c = calc();
+  let html = "";
+
+  if (!c.lines.length) {
+    html += `<p class="empty">Noch leer. Wähle zuerst deine Leistungen aus.</p>`;
+  } else {
+    html += `<ul class="lines">` +
+      c.lines.map(x => `<li><span>${x.n} ${esc(x.l.einheit)} ${esc(x.l.name)}</span><span class="dots" aria-hidden="true"></span><span class="price">${eur(x.sum)}</span></li>`).join("") +
+      `<li><span>Abholung &amp; Rückgabe</span><span class="dots" aria-hidden="true"></span><span class="price">${c.fee ? eur(c.fee) : "kostenlos"}</span></li>` +
+      `</ul>`;
+  }
+  $("#ticket-lines").innerHTML = html;
+
+  $("#ticket-total").textContent = eur(c.total);
+  $("#bar-total").textContent = eur(c.total);
+
+  let note = `Mindestbestellwert ${eur(CONFIG.mindestbestellwertCent)}.`;
+  if (c.sub > 0 && c.sub < CONFIG.mindestbestellwertCent) {
+    note = `Noch ${eur(CONFIG.mindestbestellwertCent - c.sub)} bis zum Mindestbestellwert von ${eur(CONFIG.mindestbestellwertCent)}.`;
+  }
+  if (CONFIG.preisHinweis) note += " " + CONFIG.preisHinweis;
+  $("#ticket-note").textContent = note;
+
+  const pick = parseDate($("#datum").value);
+  const zA = $("#zeit-abholung").value;
+  const zR = $("#zeit-rueckgabe").value;
+  $("#fact-abholung").textContent = pick ? `${fmtLong(pick)}${zA ? ", " + zA : ""}` : "noch offen";
+  $("#fact-rueckgabe").textContent = pick ? `${fmtLong(returnDate(pick))}${zR ? ", " + zR : ""}` : "noch offen";
+
+  $("#rueckgabe-info").textContent = pick
+    ? `Wir bringen deine Wäsche voraussichtlich am ${fmtLong(returnDate(pick))} zurück.`
+    : `Wir bringen die Wäsche etwa ${CONFIG.rueckgabeNachTagen} Tage nach der Abholung zurück.`;
+}
+
+/* ---------- Prüfen ---------- */
+function clearErr(id) {
+  const e = $("#err-" + id);
+  if (e) { e.hidden = true; e.textContent = ""; }
+  const f = id === "services" ? null : $("#" + id);
+  if (f) { f.removeAttribute("aria-invalid"); f.removeAttribute("aria-describedby"); }
+}
+
+function validate() {
+  const errs = [];
+  const add = (id, msg) => errs.push({ id, msg });
+  const c = calc();
+
+  if (c.sub === 0) {
+    add("services", "Wähle mindestens eine Leistung aus.");
+  } else if (c.sub < CONFIG.mindestbestellwertCent) {
+    add("services", `Der Mindestbestellwert beträgt ${eur(CONFIG.mindestbestellwertCent)}. Es fehlen noch ${eur(CONFIG.mindestbestellwertCent - c.sub)}.`);
+  }
+
+  if (!val("name")) add("name", "Bitte gib deinen Namen ein.");
+  if (val("telefon").replace(/\D/g, "").length < 6) add("telefon", "Bitte gib eine Telefonnummer ein, unter der wir dich erreichen.");
+  if (val("email") && !/^\S+@\S+\.\S+$/.test(val("email"))) add("email", "Diese E-Mail-Adresse sieht nicht vollständig aus.");
+  if (!val("strasse")) add("strasse", "Bitte gib Straße und Hausnummer ein.");
+
+  if (!/^\d{5}$/.test(val("plz"))) {
+    add("plz", "Bitte gib eine fünfstellige Postleitzahl ein.");
+  } else if (CONFIG.plzPraefixe.length && !CONFIG.plzPraefixe.some(p => val("plz").startsWith(p))) {
+    add("plz", "Diese Postleitzahl liegt noch nicht in unserem Liefergebiet.");
+  }
+  if (!val("ort")) add("ort", "Bitte gib den Ort ein.");
+
+  const pick = parseDate($("#datum").value);
+  if (!pick) add("datum", "Bitte wähle ein Abholdatum.");
+  else if (pick < tomorrow) add("datum", "Bitte wähle ein Datum ab morgen.");
+  else if (CONFIG.sonntagsGeschlossen && pick.getDay() === 0) add("datum", "Sonntags sind wir nicht unterwegs. Bitte wähle einen anderen Tag.");
+
+  if (!val("zeit-abholung")) add("zeit-abholung", "Bitte wähle ein Zeitfenster für die Abholung.");
+  if (!val("zeit-rueckgabe")) add("zeit-rueckgabe", "Bitte wähle ein Zeitfenster für die Rückgabe.");
+
+  return errs;
+}
+
+function showErrors(errs) {
+  $$(".err").forEach(e => { e.hidden = true; e.textContent = ""; });
+  $$("[aria-invalid]").forEach(f => { f.removeAttribute("aria-invalid"); f.removeAttribute("aria-describedby"); });
+  errs.forEach(({ id, msg }) => {
+    const e = $("#err-" + id);
+    e.textContent = msg;
+    e.hidden = false;
+    if (id !== "services") {
+      const f = $("#" + id);
+      f.setAttribute("aria-invalid", "true");
+      f.setAttribute("aria-describedby", "err-" + id);
+    }
+  });
+  if (errs.length) {
+    const first = errs[0].id;
+    (first === "services" ? $(".svc input") : $("#" + first)).focus();
+  }
+}
+
+/* ---------- Text der Bestellung ---------- */
+function buildText() {
+  const c = calc();
+  const pick = parseDate($("#datum").value);
+  const back = returnDate(pick);
+  const L = [];
+
+  L.push(`Neue Bestellung – ${CONFIG.name}`, "", "Leistungen:");
+  c.lines.forEach(x => L.push(`- ${x.n} ${x.l.einheit} ${x.l.name} (${eur(x.l.preisCent)} ${x.l.pro}) = ${eur(x.sum)}`));
+  L.push(`- Abholung & Rückgabe: ${c.fee ? eur(c.fee) : "kostenlos"}`);
+  L.push(`Vorläufige Summe: ${eur(c.total)}`, "");
+
+  L.push(`Abholung: ${fmtShort(pick)}, ${val("zeit-abholung")}`);
+  L.push(`Rückgabe: voraussichtlich ${fmtShort(back)}, ${val("zeit-rueckgabe")}`, "");
+
+  L.push("Adresse:", val("name"), val("strasse"));
+  if (val("zusatz")) L.push(val("zusatz"));
+  L.push(`${val("plz")} ${val("ort")}`, "");
+
+  L.push(`Telefon: ${val("telefon")}`);
+  if (val("email")) L.push(`E-Mail: ${val("email")}`);
+  if (val("hinweise")) L.push("", `Hinweise: ${val("hinweise")}`);
+  return L.join("\n");
+}
+
+/* ---------- Senden ---------- */
+function setStatus(msg) {
+  const s = $("#status");
+  s.textContent = msg;
+  s.hidden = !msg;
+}
+
+function ready() {
+  const errs = validate();
+  showErrors(errs);
+  if (errs.length) setStatus("Bitte prüfe die markierten Felder.");
+  else setStatus("");
+  return errs.length === 0;
+}
+
+async function copyText(t) {
+  try {
+    await navigator.clipboard.writeText(t);
+    return true;
+  } catch (_) {
+    const ta = document.createElement("textarea");
+    ta.value = t;
+    ta.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) { /* ignorieren */ }
+    ta.remove();
+    return ok;
+  }
+}
+
+function initSendButtons() {
+  const wa = CONFIG.whatsapp.replace(/\D/g, "");
+  const mail = CONFIG.email.trim();
+  $("#btn-wa").hidden = !wa;
+  $("#btn-mail").hidden = !mail;
+  $("#setup-hint").hidden = !!(wa || mail);
+
+  $("#btn-wa").addEventListener("click", () => {
+    if (!ready()) return;
+    window.open(`https://wa.me/${wa}?text=${encodeURIComponent(buildText())}`, "_blank", "noopener");
+    setStatus("WhatsApp ist geöffnet. Sende die Nachricht dort ab, erst dann ist deine Bestellung bei uns.");
+  });
+
+  $("#btn-mail").addEventListener("click", () => {
+    if (!ready()) return;
+    const subject = `Bestellung von ${val("name")}`;
+    window.location.href = `mailto:${mail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(buildText())}`;
+    setStatus("Dein E-Mail-Programm ist geöffnet. Sende die E-Mail ab, erst dann ist deine Bestellung bei uns.");
+  });
+
+  $("#btn-copy").addEventListener("click", async () => {
+    if (!ready()) return;
+    const ok = await copyText(buildText());
+    setStatus(ok
+      ? "Die Bestellung ist kopiert. Füge sie in eine Nachricht an uns ein."
+      : "Kopieren hat nicht geklappt. Bitte nutze WhatsApp oder E-Mail.");
+  });
+}
+
+/* ---------- Start ---------- */
+function init() {
+  document.title = `${CONFIG.name} – Wäsche abholen und zurückbringen lassen`;
+  $("#brand").textContent = CONFIG.name;
+  $(".site-foot").textContent = CONFIG.name;
+
+  buildServices();
+  fillSelect("zeit-abholung", CONFIG.zeitfenster);
+  fillSelect("zeit-rueckgabe", CONFIG.zeitfenster);
+  $("#datum").min = isoLocal(tomorrow);
+
+  $("#services").addEventListener("click", e => {
+    const b = e.target.closest("button[data-step]");
+    if (!b) return;
+    const id = b.closest(".svc").dataset.id;
+    setQty(id, qty[id] + Number(b.dataset.step));
+  });
+  $("#services").addEventListener("input", e => {
+    const i = e.target.closest("input[data-qty]");
+    if (i) setQty(i.dataset.qty, parseInt(i.value, 10) || 0, false);
+  });
+  $("#services").addEventListener("change", e => {
+    const i = e.target.closest("input[data-qty]");
+    if (i) setQty(i.dataset.qty, parseInt(i.value, 10) || 0, true);
+  });
+
+  $("#order").addEventListener("submit", e => e.preventDefault());
+  $("#order").addEventListener("input", e => {
+    if (e.target.id && !e.target.matches("[data-qty]")) clearErr(e.target.id);
+    render();
+  });
+  $("#order").addEventListener("change", e => {
+    if (e.target.id && !e.target.matches("[data-qty]")) clearErr(e.target.id);
+    render();
+  });
+
+  initSendButtons();
+
+  /* Leiste am unteren Rand ausblenden, sobald der Wäschezettel sichtbar ist */
+  const bar = $("#bar");
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(([entry]) => bar.classList.toggle("off", entry.isIntersecting), { threshold: 0.15 })
+      .observe($("#ticket"));
+  }
+  $("#bar-go").addEventListener("click", () => $("#ticket").scrollIntoView());
+
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
