@@ -131,6 +131,20 @@
 
   .info-line { margin: 12px 0 0; padding: 10px 14px; background: var(--sky); border-radius: 6px; color: var(--ink); }
 
+  /* Preise auf einen Blick */
+  .pricebar { list-style: none; margin: 22px 0 6px; padding: 0; display: grid; gap: 14px; }
+  @media (min-width: 640px) { .pricebar { grid-template-columns: repeat(3, 1fr); } }
+  .pricebar li {
+    padding: 12px 16px 14px;
+    background: var(--white);
+    border: 1.5px solid var(--indigo);
+    border-radius: 8px;
+    box-shadow: 4px 4px 0 var(--sky);
+  }
+  .pb-val { display: block; font: 700 1.6rem/1.2 var(--slab); color: var(--indigo); }
+  .pb-label { display: block; color: var(--muted); font-size: .95rem; }
+  .svc-max { font-weight: 400; color: var(--muted); }
+
   /* Wäschezettel */
   .ticket-wrap { margin-top: 8px; }
   .ticket {
@@ -171,6 +185,9 @@
   }
   .total .sum { font: 700 2rem var(--slab); font-variant-numeric: tabular-nums; }
   .note { margin: 6px 0 0; color: var(--muted); font-size: .9rem; }
+  .testphase { margin: 14px 0 0; padding: 10px 12px; background: var(--sky); border-left: 5px solid var(--tag); border-radius: 0 6px 6px 0; font-size: .92rem; }
+  .lines small { color: var(--muted); font-size: .9em; }
+  .block > .note { margin: 12px 0 0; }
 
   .facts { margin: 16px 0 0; display: grid; gap: 10px; }
   .facts div { display: grid; gap: 0; }
@@ -234,17 +251,20 @@
 
   <section class="hero" aria-labelledby="h1">
     <h1 id="h1">Wäsche abgeben, ohne das Haus zu verlassen.</h1>
-    <p>Du stellst deine Bestellung zusammen. Wir holen die Wäsche ab, waschen sie und bringen alles zurück.</p>
+    <p>Du sagst uns grob, wie viel Wäsche du hast. Wir holen sie ab, wiegen, waschen und bringen alles zurück.</p>
   </section>
+
+  <ul class="pricebar" id="pricebar" aria-label="Preise auf einen Blick"></ul>
 
   <main class="layout">
     <form id="order" novalidate autocomplete="on">
 
       <section class="block" aria-labelledby="h-leistungen">
-        <h2 id="h-leistungen">Was sollen wir waschen?</h2>
-        <p class="lead">Schätze die Menge grob. Du kannst sie unten im Wäschezettel jederzeit ändern.</p>
+        <h2 id="h-leistungen">Wie viel Wäsche hast du?</h2>
+        <p class="lead">Du musst nichts sortieren oder wiegen. Wähle den Sack, der ungefähr passt. Der Fahrer wiegt bei der Abholung, und wir berechnen nur das tatsächliche Gewicht.</p>
         <ul class="services" id="services"></ul>
         <p class="err" id="err-services" role="alert" hidden></p>
+        <p class="note" id="mehrgewicht" hidden></p>
       </section>
 
       <section class="block" aria-labelledby="h-adresse">
@@ -322,15 +342,16 @@
       <div class="ticket" id="ticket">
         <div class="ticket-head">
           <h2>Wäschezettel</h2>
-          <p>Deine Bestellung, vorläufig berechnet</p>
+          <p>Höchstbetrag, Endpreis nach dem Wiegen</p>
         </div>
         <div class="ticket-body">
           <div id="ticket-lines" aria-live="polite"></div>
           <div class="total">
-            <span>Vorläufige Summe</span>
+            <span>Höchstbetrag</span>
             <span class="sum" id="ticket-total">0,00&nbsp;€</span>
           </div>
           <p class="note" id="ticket-note"></p>
+          <p class="testphase" id="testphase" hidden></p>
           <dl class="facts">
             <div><dt>Abholung</dt><dd id="fact-abholung">noch offen</dd></div>
             <div><dt>Rückgabe</dt><dd id="fact-rueckgabe">noch offen</dd></div>
@@ -342,7 +363,7 @@
           <button type="button" class="btn secondary" id="btn-mail">Per E-Mail bestellen</button>
           <button type="button" class="btn plain" id="btn-copy">Bestellung als Text kopieren</button>
           <p class="status" id="status" role="status" hidden></p>
-          <p class="setup" id="setup-hint" hidden>Einrichtung: Trage in der Datei index.html unter CONFIG eine WhatsApp-Nummer oder eine E-Mail-Adresse ein. Danach erscheinen hier die Buttons zum Bestellen.</p>
+          <p class="setup" id="setup-hint" hidden>Einrichtung: Trage in der Datei config.js eine WhatsApp-Nummer oder eine E-Mail-Adresse ein. Danach erscheinen hier die Buttons zum Bestellen.</p>
         </div>
       </div>
     </aside>
@@ -353,46 +374,22 @@
 
 <div class="bar" id="bar">
   <div>
-    <span class="bar-label">Vorläufige Summe</span>
+    <span class="bar-label">Höchstbetrag</span>
     <span class="bar-sum" id="bar-total">0,00&nbsp;€</span>
   </div>
   <button type="button" class="btn" id="bar-go">Zum Wäschezettel</button>
 </div>
 
+<script src="config.js"></script>
 <script>
 "use strict";
 
-/* ------------------------------------------------------------------
-   EINSTELLUNGEN – hier änderst du Preise, Zeiten und Kontaktdaten.
-   Preise stehen in Cent (350 = 3,50 €).
-   ------------------------------------------------------------------ */
-const CONFIG = {
-  name: "Uncle Laundry",
+if (typeof CONFIG === "undefined") {
+  document.body.innerHTML = '<p style="padding:24px;font-family:sans-serif">Die Datei config.js fehlt. Sie muss im selben Ordner liegen wie index.html.</p>';
+  throw new Error("config.js fehlt");
+}
 
-  // Wohin die Bestellung geschickt wird. Mindestens eines von beiden ausfüllen.
-  whatsapp: "4915111139935",   // Ländervorwahl + Nummer, nur Ziffern, z. B. "491701234567"
-  email: "nikolaj.scheffler@gmail.com",      // z. B. "bestellung@deine-domain.de"
-
-  mindestbestellwertCent: 2000,
-  abholgebuehrCent: 390,               // wird berechnet, solange der Warenwert darunter liegt
-  abholgebuehrEntfaelltAbCent: 3500,   // ab diesem Warenwert kostenlos
-  rueckgabeNachTagen: 2,               // frühester Rückgabetag nach der Abholung
-  sonntagsGeschlossen: true,
-  plzPraefixe: [],                     // z. B. ["44"] für Postleitzahlen ab 44…; leer = keine Einschränkung
-  preisHinweis: "Der Endpreis richtet sich nach der tatsächlich abgegebenen Menge.",
-
-  zeitfenster: ["08–10 Uhr", "10–12 Uhr", "12–14 Uhr", "14–16 Uhr", "16–18 Uhr", "18–20 Uhr"],
-
-  // Beispielpreise – bitte durch deine echten Preise ersetzen.
-  leistungen: [
-    { id: "wt",  name: "Waschen & Trocknen",          beschreibung: "Alltagswäsche, gewaschen und getrocknet.",           preisCent: 350, pro: "pro kg",    einheit: "kg" },
-    { id: "wtf", name: "Waschen, Trocknen & Falten",  beschreibung: "Alltagswäsche, gewaschen, getrocknet und gefaltet.", preisCent: 490, pro: "pro kg",    einheit: "kg" },
-    { id: "hem", name: "Hemden & Blusen",             beschreibung: "Gewaschen und gebügelt.",                            preisCent: 320, pro: "pro Stück", einheit: "Stück" },
-    { id: "bet", name: "Bettwäsche-Set",              beschreibung: "Bettbezug plus Kissenbezüge, gewaschen und getrocknet.", preisCent: 750, pro: "pro Set", einheit: "Set" }
-  ]
-};
-
-/* ------------------------------------------------------------------ */
+/* Alle Einstellungen (Preise, Säcke, Kontakt) stehen in config.js. */
 
 const $  = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -402,7 +399,10 @@ const eur = cents => eurFmt.format(cents / 100);
 const val = id => $("#" + id).value.trim();
 
 const qty = {};
-CONFIG.leistungen.forEach(l => { qty[l.id] = 0; });
+CONFIG.saecke.forEach(s => { qty[s.id] = 0; });
+
+/* Preis für ein bestimmtes Gewicht, mindestens der Mindestbetrag */
+const betragFuerKg = kg => Math.max(Math.round(kg * CONFIG.preisProKgCent), CONFIG.mindestbetragCent);
 
 /* ---------- Datum ---------- */
 function isoLocal(d) {
@@ -431,19 +431,18 @@ tomorrow.setDate(tomorrow.getDate() + 1);
 
 /* ---------- Aufbau ---------- */
 function buildServices() {
-  $("#services").innerHTML = CONFIG.leistungen.map(l => `
-    <li class="svc" data-id="${esc(l.id)}">
+  $("#services").innerHTML = CONFIG.saecke.map(s => `
+    <li class="svc" data-id="${esc(s.id)}">
       <div class="svc-info">
-        <span class="svc-name">${esc(l.name)}</span>
-        <span class="svc-price">${eur(l.preisCent)} ${esc(l.pro)}</span>
-        <span class="svc-desc">${esc(l.beschreibung)}</span>
+        <span class="svc-name">${esc(s.name)} <span class="svc-max">bis ${s.maxKg} kg</span></span>
+        <span class="svc-price">Höchstbetrag ${eur(betragFuerKg(s.maxKg))}</span>
+        <span class="svc-desc">${esc(s.hilfe)}</span>
       </div>
-      <div class="stepper" role="group" aria-label="Menge: ${esc(l.name)}">
-        <button type="button" data-step="-1" aria-label="Weniger: ${esc(l.name)}">&minus;</button>
-        <input type="number" inputmode="numeric" min="0" max="99" step="1" value="0"
-               data-qty="${esc(l.id)}" aria-label="Menge in ${esc(l.einheit)}: ${esc(l.name)}">
-        <button type="button" data-step="1" aria-label="Mehr: ${esc(l.name)}">+</button>
-        <span class="unit" aria-hidden="true">${esc(l.einheit)}</span>
+      <div class="stepper" role="group" aria-label="Anzahl: ${esc(s.name)}">
+        <button type="button" data-step="-1" aria-label="Weniger: ${esc(s.name)}">&minus;</button>
+        <input type="number" inputmode="numeric" min="0" max="${CONFIG.maxProSack}" step="1" value="0"
+               data-qty="${esc(s.id)}" aria-label="Anzahl ${esc(s.name)}">
+        <button type="button" data-step="1" aria-label="Mehr: ${esc(s.name)}">+</button>
       </div>
     </li>`).join("");
 }
@@ -456,16 +455,17 @@ function fillSelect(id, options) {
 
 /* ---------- Rechnen ---------- */
 function calc() {
-  const lines = CONFIG.leistungen
-    .filter(l => qty[l.id] > 0)
-    .map(l => ({ l, n: qty[l.id], sum: qty[l.id] * l.preisCent }));
-  const sub = lines.reduce((a, x) => a + x.sum, 0);
-  const fee = sub > 0 && sub < CONFIG.abholgebuehrEntfaelltAbCent ? CONFIG.abholgebuehrCent : 0;
-  return { lines, sub, fee, total: sub + fee };
+  const lines = CONFIG.saecke
+    .filter(s => qty[s.id] > 0)
+    .map(s => ({ s, n: qty[s.id], kg: qty[s.id] * s.maxKg }));
+  const kg = lines.reduce((a, x) => a + x.kg, 0);
+  const ware = kg > 0 ? betragFuerKg(kg) : 0;
+  const fee = kg > 0 ? CONFIG.abholgebuehrCent : 0;
+  return { lines, kg, ware, fee, total: ware + fee };
 }
 
 function setQty(id, n, writeBack = true) {
-  const clean = Math.min(99, Math.max(0, Number.isFinite(n) ? Math.floor(n) : 0));
+  const clean = Math.min(CONFIG.maxProSack, Math.max(0, Number.isFinite(n) ? Math.floor(n) : 0));
   qty[id] = clean;
   const li = $(`.svc[data-id="${CSS.escape(id)}"]`);
   li.classList.toggle("on", clean > 0);
@@ -480,10 +480,14 @@ function render() {
   let html = "";
 
   if (!c.lines.length) {
-    html += `<p class="empty">Noch leer. Wähle zuerst deine Leistungen aus.</p>`;
+    html += `<p class="empty">Noch leer. Wähle zuerst einen Sack aus.</p>`;
   } else {
+    const sumLines = c.lines.reduce((a, x) => a + Math.round(x.kg * CONFIG.preisProKgCent), 0);
     html += `<ul class="lines">` +
-      c.lines.map(x => `<li><span>${x.n} ${esc(x.l.einheit)} ${esc(x.l.name)}</span><span class="dots" aria-hidden="true"></span><span class="price">${eur(x.sum)}</span></li>`).join("") +
+      c.lines.map(x => `<li><span>${x.n} × ${esc(x.s.name)} <small>(bis ${x.kg} kg)</small></span><span class="dots" aria-hidden="true"></span><span class="price">bis ${eur(Math.round(x.kg * CONFIG.preisProKgCent))}</span></li>`).join("") +
+      (c.ware > sumLines
+        ? `<li><span>Aufschlag bis Mindestbetrag</span><span class="dots" aria-hidden="true"></span><span class="price">${eur(c.ware - sumLines)}</span></li>`
+        : "") +
       `<li><span>Abholung &amp; Rückgabe</span><span class="dots" aria-hidden="true"></span><span class="price">${c.fee ? eur(c.fee) : "kostenlos"}</span></li>` +
       `</ul>`;
   }
@@ -492,12 +496,8 @@ function render() {
   $("#ticket-total").textContent = eur(c.total);
   $("#bar-total").textContent = eur(c.total);
 
-  let note = `Mindestbestellwert ${eur(CONFIG.mindestbestellwertCent)}.`;
-  if (c.sub > 0 && c.sub < CONFIG.mindestbestellwertCent) {
-    note = `Noch ${eur(CONFIG.mindestbestellwertCent - c.sub)} bis zum Mindestbestellwert von ${eur(CONFIG.mindestbestellwertCent)}.`;
-  }
-  if (CONFIG.preisHinweis) note += " " + CONFIG.preisHinweis;
-  $("#ticket-note").textContent = note;
+  $("#ticket-note").textContent =
+    `Du zahlst nur das Gewicht, das der Fahrer bei der Abholung wiegt: ${eur(CONFIG.preisProKgCent)} pro kg, mindestens ${eur(CONFIG.mindestbetragCent)}.`;
 
   const pick = parseDate($("#datum").value);
   const zA = $("#zeit-abholung").value;
@@ -521,13 +521,7 @@ function clearErr(id) {
 function validate() {
   const errs = [];
   const add = (id, msg) => errs.push({ id, msg });
-  const c = calc();
-
-  if (c.sub === 0) {
-    add("services", "Wähle mindestens eine Leistung aus.");
-  } else if (c.sub < CONFIG.mindestbestellwertCent) {
-    add("services", `Der Mindestbestellwert beträgt ${eur(CONFIG.mindestbestellwertCent)}. Es fehlen noch ${eur(CONFIG.mindestbestellwertCent - c.sub)}.`);
-  }
+  if (calc().kg === 0) add("services", "Wähle mindestens einen Sack aus.");
 
   if (!val("name")) add("name", "Bitte gib deinen Namen ein.");
   if (val("telefon").replace(/\D/g, "").length < 6) add("telefon", "Bitte gib eine Telefonnummer ein, unter der wir dich erreichen.");
@@ -578,10 +572,13 @@ function buildText() {
   const back = returnDate(pick);
   const L = [];
 
-  L.push(`Neue Bestellung – ${CONFIG.name}`, "", "Leistungen:");
-  c.lines.forEach(x => L.push(`- ${x.n} ${x.l.einheit} ${x.l.name} (${eur(x.l.preisCent)} ${x.l.pro}) = ${eur(x.sum)}`));
-  L.push(`- Abholung & Rückgabe: ${c.fee ? eur(c.fee) : "kostenlos"}`);
-  L.push(`Vorläufige Summe: ${eur(c.total)}`, "");
+  L.push(`Neue Bestellung – ${CONFIG.name}`, "", "Säcke:");
+  c.lines.forEach(x => L.push(`- ${x.n} × ${x.s.name} (bis ${x.s.maxKg} kg je Sack)`));
+  L.push(`Höchstgewicht insgesamt: ${c.kg} kg`);
+  L.push(`Preis: ${eur(CONFIG.preisProKgCent)} pro kg, mindestens ${eur(CONFIG.mindestbetragCent)}`);
+  if (c.fee) L.push(`Abholung & Rückgabe: ${eur(c.fee)}`);
+  L.push(`Höchstbetrag: ${eur(c.total)}`);
+  L.push("Der Endpreis richtet sich nach dem Gewicht, das der Fahrer bei der Abholung wiegt.", "");
 
   L.push(`Abholung: ${fmtShort(pick)}, ${val("zeit-abholung")}`);
   L.push(`Rückgabe: voraussichtlich ${fmtShort(back)}, ${val("zeit-rueckgabe")}`, "");
@@ -662,6 +659,15 @@ function init() {
   document.title = `${CONFIG.name} – Wäsche abholen und zurückbringen lassen`;
   $("#brand").textContent = CONFIG.name;
   $(".site-foot").textContent = CONFIG.name;
+
+  $("#pricebar").innerHTML = [
+    [eur(CONFIG.preisProKgCent), "pro Kilogramm Wäsche"],
+    ["Wiegen", "durch den Fahrer bei der Abholung"],
+    [eur(CONFIG.mindestbetragCent), "Mindestbetrag pro Abholung"]
+  ].map(([v, l]) => `<li><span class="pb-val">${esc(v)}</span><span class="pb-label">${esc(l)}</span></li>`).join("");
+
+  if (CONFIG.testphaseHinweis) { $("#testphase").textContent = CONFIG.testphaseHinweis; $("#testphase").hidden = false; }
+  if (CONFIG.mehrgewichtHinweis) { $("#mehrgewicht").textContent = CONFIG.mehrgewichtHinweis; $("#mehrgewicht").hidden = false; }
 
   buildServices();
   fillSelect("zeit-abholung", CONFIG.zeitfenster);
