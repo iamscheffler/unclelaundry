@@ -8,8 +8,8 @@ const CONFIG = {
   name: "Uncle Laundry",
 
   // Wohin die Bestellung geschickt wird. Mindestens eines von beiden ausfüllen.
-  whatsapp: "",   // Ländervorwahl + Nummer, nur Ziffern, z. B. "491701234567"
-  email: "",      // z. B. "bestellung@deine-domain.de"
+  whatsapp: "4915111139935",   // Ländervorwahl + Nummer, nur Ziffern, z. B. "491701234567"
+  email: "nikolaj.scheffler@gmail.com",      // z. B. "bestellung@deine-domain.de"
 
   // Preise (Beispielwerte, bitte durch deine echten Preise ersetzen)
   preisProKgCent: 490,        // Preis pro Kilogramm
