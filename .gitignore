@@ -1,1 +1,18 @@
+# macOS / Windows
+.DS_Store
+Thumbs.db
 
+# Editoren
+.vscode/
+.idea/
+
+# Abhängigkeiten und Builds (für später)
+node_modules/
+dist/
+build/
+
+# Zugangsdaten niemals einchecken
+.env
+.env.*
+!.env.example
+*.pem
