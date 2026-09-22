@@ -644,12 +644,21 @@ function calc() {
   const spezialLines = CONFIG.spezialwaesche
     .filter(x => qtySpezial[x.id] > 0)
     .map(x => ({ x, n: qtySpezial[x.id], sum: qtySpezial[x.id] * x.preisCent }));
-  const spezial = spezialLines.reduce((a, l) => a + l.sum, 0);
+  const spezialRoh = spezialLines.reduce((a, l) => a + l.sum, 0);
+
+  // Ohne Sack greift der Mindestbestellwert nicht automatisch (Säcke bringen ihn
+  // über betragFuerKg schon mit). Bei reiner Spezialwäsche wird er hier nachgeholt.
+  let spezial = spezialRoh;
+  let spezialAufschlag = 0;
+  if (lines.length === 0 && spezialRoh > 0 && spezialRoh < CONFIG.mindestbetragCent) {
+    spezialAufschlag = CONFIG.mindestbetragCent - spezialRoh;
+    spezial = CONFIG.mindestbetragCent;
+  }
 
   const zwischensumme = ware + fee + spezial;
   const rabatt = rabattBerechtigt ? Math.round(zwischensumme * CONFIG.erstbestellungRabattProzent / 100) : 0;
 
-  return { lines, kg, ware, fee, spezialLines, spezial, zwischensumme, rabatt, total: zwischensumme - rabatt };
+  return { lines, kg, ware, fee, spezialLines, spezial, spezialAufschlag, zwischensumme, rabatt, total: zwischensumme - rabatt };
 }
 
 function setQty(id, n, writeBack = true) {
@@ -689,6 +698,9 @@ function render() {
     }
     if (c.spezialLines.length) {
       html += c.spezialLines.map(l => `<li><span>${l.n} × ${esc(l.x.name)}</span><span class="dots" aria-hidden="true"></span><span class="price">${eur(l.sum)}</span></li>`).join("");
+      if (c.spezialAufschlag > 0) {
+        html += `<li><span>Aufschlag bis Mindestbestellwert</span><span class="dots" aria-hidden="true"></span><span class="price">${eur(c.spezialAufschlag)}</span></li>`;
+      }
     }
     if (c.rabatt > 0) {
       html += `<li><span>Rabatt erste Bestellung (${CONFIG.erstbestellungRabattProzent} %)</span><span class="dots" aria-hidden="true"></span><span class="price">&minus;${eur(c.rabatt)}</span></li>`;
@@ -703,7 +715,7 @@ function render() {
 
   $("#ticket-note").textContent = c.lines.length
     ? `Für die Sackwäsche zahlst du nur das Gewicht, das der Fahrer bei der Abholung wiegt: ${eur(CONFIG.preisProKgCent)} pro kg, mindestens ${eur(CONFIG.mindestbetragCent)}. Spezialwäsche wird pro Stück zum festen Preis berechnet.`
-    : `Spezialwäsche wird pro Stück zum festen Preis berechnet.`;
+    : `Spezialwäsche wird pro Stück zum festen Preis berechnet, Mindestbestellwert ${eur(CONFIG.mindestbetragCent)}.`;
 
   const pick = parseDate($("#datum").value);
   const zA = $("#zeit-abholung").value;
@@ -1044,7 +1056,7 @@ function initKonto() {
     });
     btn.disabled = false;
     if (error) {
-      meldungZeigen("vergessen-msg", "Das hat leider nicht geklappt. Bitte versuch es erneut.");
+      meldungZeigen("vergessen-msg", `Das hat leider nicht geklappt (${error.message}). Bitte versuch es erneut.`);
       return;
     }
     passwortVergessenAnzeigen(false);
@@ -1066,7 +1078,7 @@ function initKonto() {
     const { error } = await sb.auth.updateUser({ password: $("#neu-pw").value });
     btn.disabled = false;
     if (error) {
-      meldungZeigen("neues-passwort-msg", "Das hat leider nicht geklappt. Bitte versuch es erneut.");
+      meldungZeigen("neues-passwort-msg", `Das hat leider nicht geklappt (${error.message}). Bitte versuch es erneut.`);
       return;
     }
 
@@ -1137,7 +1149,7 @@ async function bestellungSenden() {
     setStatus("Danke! Deine Bestellung ist bei uns eingegangen. Wir melden uns zur Bestätigung.");
     btn.textContent = "Bestellung gesendet";
   } catch (err) {
-    setStatus("Das hat leider nicht geklappt. Bitte versuch es in ein paar Minuten erneut.");
+    setStatus(`Das hat leider nicht geklappt (${err.message || err}). Bitte versuch es in ein paar Minuten erneut.`);
     btn.disabled = false;
   }
 }
