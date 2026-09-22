@@ -109,6 +109,10 @@
   .status-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1.5px dashed var(--line); }
   .status-zeile select { min-height: 44px; padding: 8px 12px; border: 1.5px solid var(--indigo); border-radius: 6px; background: var(--white); }
 
+  .mail-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1.5px dashed var(--line); }
+  .mail-zeile .btn { font-size: .92rem; padding: 0 14px; min-height: 40px; }
+  .mail-gesendet { font-size: .88rem; color: var(--ok); font-weight: 600; }
+
   .abrechnung-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1.5px dashed var(--line); }
   .abrechnung-zeile input {
     width: 100px; min-height: 40px; padding: 6px 10px;
@@ -312,6 +316,21 @@ function spezialText(b) {
   return "<ul>" + s.map(x => `<li>${x.anzahl} × ${esc(x.name)}</li>`).join("") + "</ul>";
 }
 
+function mailButtonsHtml(b) {
+  const abholung = b.mail_fahrer_abholung_gesendet
+    ? `<span class="mail-gesendet">✓ Kunde über Abholung informiert</span>`
+    : `<button type="button" class="btn secondary" data-mail="fahrer_abholung" data-id="${b.id}">📧 Fahrer unterwegs (Abholung)</button>`;
+  const rueckgabe = b.mail_fahrer_rueckgabe_gesendet
+    ? `<span class="mail-gesendet">✓ Kunde über Rückgabe informiert</span>`
+    : `<button type="button" class="btn secondary" data-mail="fahrer_rueckgabe" data-id="${b.id}">📧 Fahrer unterwegs (Rückgabe)</button>`;
+  return `
+    <div class="mail-zeile">
+      ${abholung}
+      ${rueckgabe}
+      <span class="status-speichern" id="mail-info-${b.id}" hidden></span>
+    </div>`;
+}
+
 function abrechnungHtml(b) {
   if (b.bezahlt) return "";
   if (!b.stripe_payment_intent_id) {
@@ -386,6 +405,7 @@ function listeRendern() {
         <span class="status-speichern" id="status-info-${b.id}" hidden></span>
       </div>
 
+      ${mailButtonsHtml(b)}
       ${abrechnungHtml(b)}
     </article>`).join("") + `</div>`;
 
@@ -450,6 +470,35 @@ function listeRendern() {
       b.bezahlt = true;
       b.abgerechneter_betrag_cent = betrag;
       b.tatsaechliches_gewicht_kg = gewicht;
+      listeRendern();
+    });
+  });
+
+  $("#bestell-liste").querySelectorAll("[data-mail]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const typ = btn.dataset.mail;
+      const b = bestellungen.find(x => x.id === id);
+      const info = $("#mail-info-" + id);
+      if (!b) return;
+
+      btn.disabled = true;
+      info.textContent = "Wird gesendet …";
+      info.hidden = false;
+
+      const { data, error } = await sb.functions.invoke("send-order-email", {
+        body: { bestellung_id: id, typ }
+      });
+
+      if (error || !data || data.error) {
+        info.textContent = "Fehler: " + (data && data.error ? data.error : (error ? error.message : "unbekannt"));
+        btn.disabled = false;
+        return;
+      }
+
+      if (typ === "fahrer_abholung") b.mail_fahrer_abholung_gesendet = true;
+      if (typ === "fahrer_rueckgabe") b.mail_fahrer_rueckgabe_gesendet = true;
+      info.hidden = true;
       listeRendern();
     });
   });
