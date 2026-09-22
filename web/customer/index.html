@@ -247,7 +247,7 @@
     border-radius: 10px;
   }
   .account h2 { margin: 0 0 4px; font: 700 1.25rem var(--slab); color: var(--indigo); }
-  .account > .lead { margin: 0 0 16px; color: var(--muted); }
+  .account .lead { margin: 0 0 16px; color: var(--muted); }
   .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
   .tab {
     flex: 1; min-height: 44px; padding: 0 12px;
@@ -327,8 +327,12 @@
           <input id="login-pw" type="password" autocomplete="current-password" required>
         </div>
         <p class="msg err" id="login-msg" hidden></p>
+        <p class="msg ok" id="login-info" hidden></p>
         <button type="submit" class="btn primary" id="btn-login">Anmelden</button>
-        <p class="switch">Noch kein Konto? <button type="button" id="link-register">Jetzt registrieren</button></p>
+        <p class="switch">
+          Noch kein Konto? <button type="button" id="link-register">Jetzt registrieren</button><br>
+          <button type="button" id="link-passwort-vergessen">Passwort vergessen?</button>
+        </p>
       </form>
 
       <form id="form-register" novalidate hidden>
@@ -344,10 +348,43 @@
           <label for="reg-pw">Passwort</label>
           <input id="reg-pw" type="password" autocomplete="new-password" minlength="6" required>
         </div>
+        <div>
+          <label for="reg-pw2">Passwort wiederholen</label>
+          <input id="reg-pw2" type="password" autocomplete="new-password" minlength="6" required>
+        </div>
         <p class="opt">Mindestens 6 Zeichen.</p>
         <p class="msg err" id="register-msg" hidden></p>
         <button type="submit" class="btn primary" id="btn-register">Registrieren &amp; Rabatt sichern</button>
         <p class="switch">Schon registriert? <button type="button" id="link-login">Jetzt anmelden</button></p>
+      </form>
+
+      <form id="form-passwort-vergessen" novalidate hidden>
+        <p class="lead" style="margin:0 0 12px">Trage deine E-Mail-Adresse ein. Wir schicken dir einen Link, mit dem du ein neues Passwort setzen kannst.</p>
+        <div>
+          <label for="vergessen-email">E-Mail</label>
+          <input id="vergessen-email" type="email" autocomplete="email" required>
+        </div>
+        <p class="msg err" id="vergessen-msg" hidden></p>
+        <button type="submit" class="btn primary" id="btn-passwort-vergessen">Link zum Zurücksetzen senden</button>
+        <p class="switch"><button type="button" id="link-zurueck-login">Zurück zur Anmeldung</button></p>
+      </form>
+    </div>
+
+    <div id="account-recovery" hidden>
+      <h2>Neues Passwort setzen</h2>
+      <p class="lead">Du hast auf den Link aus unserer E-Mail geklickt. Wähle jetzt ein neues Passwort.</p>
+      <form id="form-neues-passwort" novalidate>
+        <div>
+          <label for="neu-pw">Neues Passwort</label>
+          <input id="neu-pw" type="password" autocomplete="new-password" minlength="6" required>
+        </div>
+        <div>
+          <label for="neu-pw2">Neues Passwort wiederholen</label>
+          <input id="neu-pw2" type="password" autocomplete="new-password" minlength="6" required>
+        </div>
+        <p class="opt">Mindestens 6 Zeichen.</p>
+        <p class="msg err" id="neues-passwort-msg" hidden></p>
+        <button type="submit" class="btn primary" id="btn-neues-passwort">Neues Passwort speichern</button>
       </form>
     </div>
 
@@ -511,6 +548,7 @@ const sb = (CONFIG.supabaseUrl && CONFIG.supabaseAnonKey)
 
 let angemeldeterNutzer = null;   // { id, email }
 let rabattBerechtigt = false;    // true, solange die erste Bestellung noch nicht aufgegeben wurde
+let istWiederherstellung = false; // true, solange der Kunde noch ein neues Passwort setzen muss
 
 /* Alle Einstellungen (Preise, Säcke, Kontakt) stehen in config.js. */
 
@@ -856,6 +894,17 @@ function meldungZeigen(id, text) {
 /* ---------- Konto: Anzeige umschalten ---------- */
 function kontoAnzeigen() {
   $("#account-loading").hidden = true;
+
+  if (istWiederherstellung) {
+    $("#account-guest").hidden = true;
+    $("#account-in").hidden = true;
+    $("#account-recovery").hidden = false;
+    $("#btn-order").disabled = true;
+    $("#btn-order").textContent = "Bitte zuerst neues Passwort setzen";
+    return;
+  }
+  $("#account-recovery").hidden = true;
+
   if (angemeldeterNutzer) {
     $("#account-guest").hidden = true;
     $("#account-in").hidden = false;
@@ -878,6 +927,13 @@ function tabWechseln(zuRegistrieren) {
   $("#tab-register").setAttribute("aria-selected", String(zuRegistrieren));
   $("#form-login").hidden = zuRegistrieren;
   $("#form-register").hidden = !zuRegistrieren;
+  $("#form-passwort-vergessen").hidden = true;
+}
+
+function passwortVergessenAnzeigen(anzeigen) {
+  $("#form-login").hidden = anzeigen;
+  $("#form-register").hidden = true;
+  $("#form-passwort-vergessen").hidden = !anzeigen;
 }
 
 /* ---------- Rabatt-Status aus dem Profil laden ---------- */
@@ -935,6 +991,13 @@ function initKonto() {
   $("#form-register").addEventListener("submit", async e => {
     e.preventDefault();
     meldungZeigen("register-msg", "");
+
+    if ($("#reg-pw").value !== $("#reg-pw2").value) {
+      meldungZeigen("register-msg", "Die beiden Passwörter stimmen nicht überein.");
+      $("#reg-pw2").focus();
+      return;
+    }
+
     const btn = $("#btn-register");
     btn.disabled = true;
     const { data, error } = await sb.auth.signUp({
@@ -964,8 +1027,62 @@ function initKonto() {
     await nutzerSetzen(null);
   });
 
-  sb.auth.onAuthStateChange((_event, session) => {
-    nutzerSetzen(session ? session.user : null);
+  $("#link-passwort-vergessen").addEventListener("click", () => {
+    meldungZeigen("login-info", "");
+    $("#vergessen-email").value = val("login-email");
+    passwortVergessenAnzeigen(true);
+  });
+  $("#link-zurueck-login").addEventListener("click", () => passwortVergessenAnzeigen(false));
+
+  $("#form-passwort-vergessen").addEventListener("submit", async e => {
+    e.preventDefault();
+    meldungZeigen("vergessen-msg", "");
+    const btn = $("#btn-passwort-vergessen");
+    btn.disabled = true;
+    const { error } = await sb.auth.resetPasswordForEmail($("#vergessen-email").value.trim(), {
+      redirectTo: window.location.href.split("#")[0].split("?")[0]
+    });
+    btn.disabled = false;
+    if (error) {
+      meldungZeigen("vergessen-msg", "Das hat leider nicht geklappt. Bitte versuch es erneut.");
+      return;
+    }
+    passwortVergessenAnzeigen(false);
+    meldungZeigen("login-info", "Wir haben dir eine E-Mail geschickt. Klicke dort auf den Link, um ein neues Passwort zu setzen.");
+  });
+
+  $("#form-neues-passwort").addEventListener("submit", async e => {
+    e.preventDefault();
+    meldungZeigen("neues-passwort-msg", "");
+
+    if ($("#neu-pw").value !== $("#neu-pw2").value) {
+      meldungZeigen("neues-passwort-msg", "Die beiden Passwörter stimmen nicht überein.");
+      $("#neu-pw2").focus();
+      return;
+    }
+
+    const btn = $("#btn-neues-passwort");
+    btn.disabled = true;
+    const { error } = await sb.auth.updateUser({ password: $("#neu-pw").value });
+    btn.disabled = false;
+    if (error) {
+      meldungZeigen("neues-passwort-msg", "Das hat leider nicht geklappt. Bitte versuch es erneut.");
+      return;
+    }
+
+    istWiederherstellung = false;
+    meldungZeigen("login-info", "Dein neues Passwort ist gespeichert.");
+    const { data: { user } } = await sb.auth.getUser();
+    await nutzerSetzen(user);
+  });
+
+  sb.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY") {
+      istWiederherstellung = true;
+      kontoAnzeigen();
+      return;
+    }
+    if (!istWiederherstellung) nutzerSetzen(session ? session.user : null);
   });
 }
 
