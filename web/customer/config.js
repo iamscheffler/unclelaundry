@@ -12,6 +12,11 @@ const CONFIG = {
   supabaseAnonKey: "sb_publishable_GoLQ3A6V9fud5SKo2KXnaA_DFTknNLg",
   erstbestellungRabattProzent: 10,
 
+  // Stripe: für die Kartenreservierung bei der Bestellung. Dieser Schlüssel
+  // ist zum Veröffentlichen gedacht, der geheime Schlüssel liegt separat
+  // und sicher bei Supabase (siehe supabase/functions/create-payment-intent).
+  stripePublishableKey: "pk_test_51UIan7Bd13QqFd7e04UcMvpMAFSTd80U0jLRAWuPzYYtQFtoKfewgwu2zYzHPjYG1B8gPRe1LUnodzDJXEQyJbEH00aaseAQ40",
+
   // Fallback, nur falls Supabase einmal nicht erreichbar ist. Ohne Eintrag
   // erscheint der Hinweis "Bestellung kann gerade nicht gesendet werden".
   whatsapp: "",   // Ländervorwahl + Nummer, nur Ziffern, z. B. "491701234567"

@@ -270,6 +270,17 @@
   .switch { margin-top: 4px; font-size: .92rem; color: var(--muted); }
   .switch button { background: none; border: none; padding: 0; color: var(--focus); text-decoration: underline; cursor: pointer; font: inherit; }
 
+  /* Zahlung */
+  #zahlung-bereich { display: grid; gap: 12px; }
+  #zahlung-element-wrap {
+    padding: 14px; background: var(--white); border: 1.5px solid var(--line); border-radius: 8px;
+  }
+  .zahlung-hinweis { margin: 0; font-size: .85rem; color: var(--muted); }
+  .bezahlt-hinweis {
+    padding: 14px 16px; background: #e6f4ea; border: 1.5px solid var(--ok, #1e6b2f); border-radius: 8px;
+    color: #1e6b2f; font-weight: 600;
+  }
+
   .site-foot { padding: 24px 0 40px; color: var(--muted); font-size: .9rem; border-top: 2px solid var(--indigo); }
 
   .foto-row { margin-top: 16px; }
@@ -514,7 +525,21 @@
           <div class="perf" aria-hidden="true"></div>
         </div>
         <div class="ticket-actions">
-          <button type="button" class="btn primary" id="btn-order" disabled>Jetzt anmelden, um zu bestellen</button>
+          <div id="bestellen-bereich">
+            <button type="button" class="btn primary" id="btn-order" disabled>Jetzt anmelden, um zu bestellen</button>
+          </div>
+
+          <div id="zahlung-bereich" hidden>
+            <div id="zahlung-element-wrap"></div>
+            <p class="zahlung-hinweis">Der Betrag wird jetzt reserviert, nicht abgebucht. Abgebucht wird nur das tatsächliche Gewicht, das der Fahrer bei der Abholung wiegt.</p>
+            <button type="button" class="btn primary" id="btn-bezahlen">Jetzt reservieren</button>
+            <button type="button" class="btn plain" id="btn-zahlung-abbrechen">Zurück zur Bestellung</button>
+          </div>
+
+          <div id="fertig-bereich" hidden>
+            <p class="bezahlt-hinweis">Danke! Deine Bestellung ist bei uns eingegangen. Wir melden uns zur Bestätigung.</p>
+          </div>
+
           <p class="status" id="status" role="status" hidden></p>
         </div>
       </div>
@@ -533,6 +558,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://js.stripe.com/v3/"></script>
 <script src="config.js"></script>
 <script>
 "use strict";
@@ -545,6 +571,10 @@ if (typeof CONFIG === "undefined") {
 const sb = (CONFIG.supabaseUrl && CONFIG.supabaseAnonKey)
   ? supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseAnonKey)
   : null;
+
+const stripeClient = CONFIG.stripePublishableKey ? Stripe(CONFIG.stripePublishableKey) : null;
+let stripeElements = null;
+let aktuellerPaymentIntentId = null;
 
 let angemeldeterNutzer = null;   // { id, email }
 let rabattBerechtigt = false;    // true, solange die erste Bestellung noch nicht aufgegeben wurde
@@ -922,7 +952,7 @@ function kontoAnzeigen() {
     $("#account-in").hidden = false;
     $("#account-email").textContent = angemeldeterNutzer.email;
     $("#btn-order").disabled = false;
-    $("#btn-order").textContent = "Bestellung aufgeben";
+    $("#btn-order").textContent = "Weiter zur Zahlung";
   } else {
     $("#account-guest").hidden = false;
     $("#account-in").hidden = true;
@@ -1021,7 +1051,7 @@ function initKonto() {
     if (error) {
       meldungZeigen("register-msg", error.message.includes("already")
         ? "Für diese E-Mail-Adresse gibt es schon ein Konto. Bitte melde dich an."
-        : "Registrierung fehlgeschlagen. Bitte versuch es erneut.");
+        : `Registrierung fehlgeschlagen (${error.message}). Bitte versuch es erneut.`);
       return;
     }
     if (data.session) {
@@ -1099,16 +1129,72 @@ function initKonto() {
 }
 
 /* ---------- Bestellung senden ---------- */
-async function bestellungSenden() {
-  if (!sb) { setStatus("Bestellung kann gerade nicht gesendet werden. Bitte versuch es später erneut."); return; }
-  if (!angemeldeterNutzer) { setStatus("Bitte melde dich zuerst an."); return; }
+/* ---------- Schritt 1: Zur Zahlung wechseln ---------- */
+async function zurZahlungWechseln() {
+  if (!sb || !angemeldeterNutzer) { setStatus("Bitte melde dich zuerst an."); return; }
   if (!ready()) return;
+  if (!stripeClient) { setStatus("Zahlung ist gerade nicht eingerichtet. Bitte versuch es später erneut."); return; }
 
   const btn = $("#btn-order");
   btn.disabled = true;
-  setStatus("Bestellung wird gesendet …");
+  setStatus("Zahlung wird vorbereitet …");
 
   try {
+    const c = calc();
+    const { data, error } = await sb.functions.invoke("create-payment-intent", {
+      body: { betrag_cent: c.total }
+    });
+    if (error) throw error;
+    if (!data || !data.client_secret) throw new Error(data && data.error ? data.error : "Keine Antwort erhalten.");
+
+    aktuellerPaymentIntentId = data.payment_intent_id;
+    stripeElements = stripeClient.elements({ clientSecret: data.client_secret });
+    const zahlungsElement = stripeElements.create("payment");
+    $("#zahlung-element-wrap").innerHTML = "";
+    zahlungsElement.mount("#zahlung-element-wrap");
+
+    $("#bestellen-bereich").hidden = true;
+    $("#zahlung-bereich").hidden = false;
+    $("#btn-bezahlen").textContent = `${eur(c.total)} jetzt reservieren`;
+    setStatus("");
+  } catch (err) {
+    setStatus(`Das hat leider nicht geklappt (${err.message || err}). Bitte versuch es erneut.`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ---------- Zurück zur Bestellung, ohne zu bezahlen ---------- */
+function zahlungAbbrechen() {
+  $("#zahlung-bereich").hidden = true;
+  $("#bestellen-bereich").hidden = false;
+  $("#zahlung-element-wrap").innerHTML = "";
+  stripeElements = null;
+  aktuellerPaymentIntentId = null;
+  setStatus("");
+}
+
+/* ---------- Schritt 2: Karte bestätigen, Reservierung auslösen, Bestellung speichern ---------- */
+async function bestellungAbschliessen() {
+  if (!stripeClient || !stripeElements) return;
+
+  const btn = $("#btn-bezahlen");
+  btn.disabled = true;
+  setStatus("Zahlung wird geprüft …");
+
+  try {
+    const { error: zahlungsFehler, paymentIntent } = await stripeClient.confirmPayment({
+      elements: stripeElements,
+      redirect: "if_required",
+      confirmParams: { return_url: window.location.href.split("#")[0].split("?")[0] }
+    });
+    if (zahlungsFehler) throw new Error(zahlungsFehler.message);
+    if (!paymentIntent || (paymentIntent.status !== "requires_capture" && paymentIntent.status !== "succeeded")) {
+      throw new Error("Die Zahlung konnte nicht bestätigt werden.");
+    }
+
+    setStatus("Zahlung reserviert. Bestellung wird gespeichert …");
+
     let fotoUrl = null;
     const datei = $("#foto").files && $("#foto").files[0];
     if (datei) {
@@ -1121,6 +1207,7 @@ async function bestellungSenden() {
     const c = calc();
     const { error } = await sb.from("bestellungen").insert({
       user_id: angemeldeterNutzer.id,
+      stripe_payment_intent_id: aktuellerPaymentIntentId,
       saecke: c.lines.map(x => ({ id: x.s.id, name: x.s.name, anzahl: x.n, max_kg: x.s.maxKg })),
       spezialwaesche: c.spezialLines.map(l => ({ id: l.x.id, name: l.x.name, anzahl: l.n, preis_cent: l.x.preisCent, summe_cent: l.sum })),
       hoechstgewicht_kg: c.kg,
@@ -1146,10 +1233,11 @@ async function bestellungSenden() {
       rabattBerechtigt = false;
     }
 
-    setStatus("Danke! Deine Bestellung ist bei uns eingegangen. Wir melden uns zur Bestätigung.");
-    btn.textContent = "Bestellung gesendet";
+    $("#zahlung-bereich").hidden = true;
+    $("#fertig-bereich").hidden = false;
+    setStatus("");
   } catch (err) {
-    setStatus(`Das hat leider nicht geklappt (${err.message || err}). Bitte versuch es in ein paar Minuten erneut.`);
+    setStatus(`Das hat leider nicht geklappt (${err.message || err}). Bitte versuch es erneut.`);
     btn.disabled = false;
   }
 }
@@ -1217,7 +1305,9 @@ function init() {
     render();
   });
 
-  $("#btn-order").addEventListener("click", bestellungSenden);
+  $("#btn-order").addEventListener("click", zurZahlungWechseln);
+  $("#btn-bezahlen").addEventListener("click", bestellungAbschliessen);
+  $("#btn-zahlung-abbrechen").addEventListener("click", zahlungAbbrechen);
   initKonto();
   initFoto();
 
