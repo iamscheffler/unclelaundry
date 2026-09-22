@@ -270,6 +270,25 @@
   .switch { margin-top: 4px; font-size: .92rem; color: var(--muted); }
   .switch button { background: none; border: none; padding: 0; color: var(--focus); text-decoration: underline; cursor: pointer; font: inherit; }
 
+  /* Meine Bestellungen */
+  #meine-bestellungen { margin: 0 0 30px; }
+  #meine-bestellungen h2 { margin: 0 0 14px; font: 700 1.25rem var(--slab); color: var(--indigo); }
+  .bestellungen-liste { display: grid; gap: 12px; }
+  .bestellung-karte {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px 16px;
+    background: var(--white); border: 1.5px solid var(--line); border-radius: 8px;
+  }
+  .bk-icon { flex: none; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; }
+  .bk-info { flex: 1; min-width: 0; }
+  .bk-status { font-weight: 700; color: var(--indigo); }
+  .bk-datum { color: var(--muted); font-size: .9rem; }
+  .bk-betrag { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .waschtrommel { transform-box: fill-box; transform-origin: center; animation: drehen 2.1s linear infinite; }
+  @keyframes drehen { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .waschtrommel { animation: none; } }
+
   /* Zahlung */
   #zahlung-bereich { display: grid; gap: 12px; }
   #zahlung-element-wrap {
@@ -406,6 +425,11 @@
         <button type="button" class="btn plain" id="btn-logout">Abmelden</button>
       </div>
     </div>
+  </section>
+
+  <section id="meine-bestellungen" hidden aria-labelledby="h-meine-bestellungen">
+    <h2 id="h-meine-bestellungen">Meine Bestellungen</h2>
+    <div class="bestellungen-liste" id="bestellungen-liste"></div>
   </section>
 
   <main class="layout">
@@ -934,6 +958,55 @@ function meldungZeigen(id, text) {
 }
 
 /* ---------- Konto: Anzeige umschalten ---------- */
+const STATUS_ICON = {
+  neu: '<span aria-hidden="true">📦</span>',
+  abgeholt: '<span aria-hidden="true">🚐</span>',
+  in_bearbeitung: `<svg viewBox="0 0 64 64" width="34" height="34" aria-hidden="true">
+      <rect x="4" y="4" width="56" height="56" rx="8" fill="#ffffff" stroke="#1c2b5a" stroke-width="3"/>
+      <circle cx="32" cy="36" r="17" fill="#dce7f7" stroke="#1c2b5a" stroke-width="3"/>
+      <g class="waschtrommel">
+        <circle cx="32" cy="29" r="4.5" fill="#1c2b5a"/>
+        <circle cx="24" cy="40" r="3.5" fill="#f4c84a"/>
+        <circle cx="40" cy="41" r="3.5" fill="#1c2b5a"/>
+      </g>
+      <circle cx="12" cy="10" r="2" fill="#1c2b5a"/>
+      <circle cx="19" cy="10" r="2" fill="#1c2b5a"/>
+    </svg>`,
+  bereit: '<span aria-hidden="true">✅</span>',
+  zurueckgebracht: '<span aria-hidden="true">🏠</span>'
+};
+const STATUS_TEXT = {
+  neu: "Bestellung eingegangen",
+  abgeholt: "Abgeholt",
+  in_bearbeitung: "Wird gerade gewaschen",
+  bereit: "Bereit zur Rückgabe",
+  zurueckgebracht: "Zurückgebracht"
+};
+
+async function meineBestellungenLaden() {
+  if (!sb || !angemeldeterNutzer) { $("#meine-bestellungen").hidden = true; return; }
+
+  const { data, error } = await sb
+    .from("bestellungen")
+    .select("id, status, created_at, hoechstbetrag_cent, abgerechneter_betrag_cent, bezahlt")
+    .eq("user_id", angemeldeterNutzer.id)
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error || !data || !data.length) { $("#meine-bestellungen").hidden = true; return; }
+
+  $("#meine-bestellungen").hidden = false;
+  $("#bestellungen-liste").innerHTML = data.map(b => `
+    <div class="bestellung-karte">
+      <div class="bk-icon">${STATUS_ICON[b.status] || STATUS_ICON.neu}</div>
+      <div class="bk-info">
+        <div class="bk-status">${esc(STATUS_TEXT[b.status] || b.status)}</div>
+        <div class="bk-datum">Bestellt am ${new Date(b.created_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })}</div>
+      </div>
+      <div class="bk-betrag">${eur(b.bezahlt ? b.abgerechneter_betrag_cent : b.hoechstbetrag_cent)}</div>
+    </div>`).join("");
+}
+
 function kontoAnzeigen() {
   $("#account-loading").hidden = true;
 
@@ -999,6 +1072,7 @@ async function nutzerSetzen(user) {
     rabattBerechtigt = false;
   }
   kontoAnzeigen();
+  meineBestellungenLaden();
 }
 
 /* ---------- Login und Registrierung ---------- */
@@ -1205,7 +1279,7 @@ async function bestellungAbschliessen() {
     }
 
     const c = calc();
-    const { error } = await sb.from("bestellungen").insert({
+    const { data: neueBestellung, error } = await sb.from("bestellungen").insert({
       user_id: angemeldeterNutzer.id,
       stripe_payment_intent_id: aktuellerPaymentIntentId,
       preis_pro_kg_cent: CONFIG.preisProKgCent,
@@ -1229,13 +1303,20 @@ async function bestellungAbschliessen() {
       zeit_rueckgabe: val("zeit-rueckgabe"),
       hinweise: val("hinweise"),
       foto_url: fotoUrl
-    });
+    }).select("id").single();
     if (error) throw error;
 
     if (c.rabatt > 0) {
       await sb.from("profiles").update({ erstrabatt_verwendet: true }).eq("id", angemeldeterNutzer.id);
       rabattBerechtigt = false;
     }
+
+    if (neueBestellung) {
+      sb.functions.invoke("send-order-email", {
+        body: { bestellung_id: neueBestellung.id, typ: "bestellbestaetigung" }
+      }).catch(() => {}); // Bestätigungsmail ist ein Zusatz, kein Abbruchgrund
+    }
+    meineBestellungenLaden();
 
     $("#zahlung-bereich").hidden = true;
     $("#fertig-bereich").hidden = false;
