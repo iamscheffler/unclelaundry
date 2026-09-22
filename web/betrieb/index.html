@@ -108,6 +108,14 @@
 
   .status-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1.5px dashed var(--line); }
   .status-zeile select { min-height: 44px; padding: 8px 12px; border: 1.5px solid var(--indigo); border-radius: 6px; background: var(--white); }
+
+  .abrechnung-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1.5px dashed var(--line); }
+  .abrechnung-zeile input {
+    width: 100px; min-height: 40px; padding: 6px 10px;
+    border: 1.5px solid var(--indigo); border-radius: 6px; background: var(--white);
+  }
+  .badge.bezahlt { background: #dcefdd; color: var(--ok); }
+  .badge.nicht-bezahlt { background: var(--sky); color: var(--indigo); }
   .status-speichern { font-size: .88rem; color: var(--muted); }
 
   .site-foot { padding: 30px 0; text-align: center; color: var(--muted); font-size: .88rem; }
@@ -278,10 +286,47 @@ function saeckeText(b) {
   if (!s.length) return "";
   return "<ul>" + s.map(x => `<li>${x.anzahl} × ${esc(x.name)} <small>(bis ${x.max_kg} kg)</small></li>`).join("") + "</ul>";
 }
+function betragBerechnen(b, gewichtKg) {
+  const hatSack = Array.isArray(b.saecke) && b.saecke.length > 0;
+
+  // Ohne Sack gibt es nichts nachzuwiegen: Der ursprüngliche Höchstbetrag
+  // ist bei reiner Spezialwäsche bereits der exakte Endbetrag (inklusive
+  // eines eventuellen Aufschlags bis zum Mindestbestellwert).
+  if (!hatSack) return b.hoechstbetrag_cent;
+
+  const spezialSumme = (Array.isArray(b.spezialwaesche) ? b.spezialwaesche : [])
+    .reduce((a, x) => a + (x.summe_cent || 0), 0);
+
+  const sackBetrag = Math.max(Math.round(gewichtKg * (b.preis_pro_kg_cent || 0)), b.mindestbetrag_cent || 0);
+
+  const zwischensumme = sackBetrag + (b.abholgebuehr_cent || 0) + spezialSumme;
+  const rabatt = b.rabatt_prozent ? Math.round(zwischensumme * b.rabatt_prozent / 100) : 0;
+  const betrag = zwischensumme - rabatt;
+
+  return Math.min(betrag, b.hoechstbetrag_cent);
+}
+
 function spezialText(b) {
   const s = Array.isArray(b.spezialwaesche) ? b.spezialwaesche : [];
   if (!s.length) return "";
   return "<ul>" + s.map(x => `<li>${x.anzahl} × ${esc(x.name)}</li>`).join("") + "</ul>";
+}
+
+function abrechnungHtml(b) {
+  if (b.bezahlt) return "";
+  if (!b.stripe_payment_intent_id) {
+    return `<div class="abrechnung-zeile"><span class="status-speichern">Keine Zahlung zu dieser Bestellung hinterlegt.</span></div>`;
+  }
+  const hatSack = Array.isArray(b.saecke) && b.saecke.length > 0;
+  return `
+    <div class="abrechnung-zeile">
+      ${hatSack ? `
+        <label for="gewicht-${b.id}" style="margin:0">Gewicht (kg)</label>
+        <input type="number" id="gewicht-${b.id}" min="0.1" max="${b.hoechstgewicht_kg || 99}" step="0.1" placeholder="${b.hoechstgewicht_kg || ""}">
+      ` : ""}
+      <button type="button" class="btn primary" data-abrechnen="${b.id}">Abrechnen</button>
+      <span class="status-speichern" id="abrechnen-info-${b.id}" hidden></span>
+    </div>`;
 }
 
 function listeRendern() {
@@ -297,6 +342,7 @@ function listeRendern() {
       <div class="order-head">
         <h2>${esc(b.name || "Ohne Namen")}</h2>
         <span class="badge ${esc(b.status)}">${esc(statusLabel(b.status))}</span>
+        <span class="badge ${b.bezahlt ? "bezahlt" : "nicht-bezahlt"}">${b.bezahlt ? "Abgerechnet" : "Nicht abgerechnet"}</span>
       </div>
       <p class="order-erstellt">Bestellt am ${zeitpunktFmt(b.created_at)}</p>
 
@@ -324,8 +370,9 @@ function listeRendern() {
         </div>
         <div>
           <h3>Preis</h3>
-          <p class="preis">${eur(b.hoechstbetrag_cent)}</p>
+          <p class="preis">${eur(b.hoechstbetrag_cent)} <span style="font-weight:400;color:var(--muted)">Höchstbetrag</span></p>
           ${b.rabatt_cent ? `<p>davon Rabatt: -${eur(b.rabatt_cent)}</p>` : ""}
+          ${b.bezahlt ? `<p>Abgerechnet: ${eur(b.abgerechneter_betrag_cent)}${b.tatsaechliches_gewicht_kg != null ? ` bei ${b.tatsaechliches_gewicht_kg} kg` : ""}</p>` : ""}
         </div>
         ${b.hinweise ? `<div><h3>Hinweise</h3><p>${esc(b.hinweise)}</p></div>` : ""}
         ${b.foto_url ? `<div><h3>Foto</h3><a class="foto-link" href="${esc(b.foto_url)}" target="_blank" rel="noopener"><img src="${esc(b.foto_url)}" alt="Foto zur Bestellung von ${esc(b.name || "")}"></a></div>` : ""}
@@ -338,6 +385,8 @@ function listeRendern() {
         </select>
         <span class="status-speichern" id="status-info-${b.id}" hidden></span>
       </div>
+
+      ${abrechnungHtml(b)}
     </article>`).join("") + `</div>`;
 
   $("#bestell-liste").querySelectorAll("select[data-id]").forEach(sel => {
@@ -360,6 +409,48 @@ function listeRendern() {
       info.textContent = "Gespeichert.";
       setTimeout(() => { info.hidden = true; }, 2000);
       filterAnzeigen();
+    });
+  });
+
+  $("#bestell-liste").querySelectorAll("[data-abrechnen]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.abrechnen;
+      const b = bestellungen.find(x => x.id === id);
+      const info = $("#abrechnen-info-" + id);
+      if (!b) return;
+
+      const hatSack = Array.isArray(b.saecke) && b.saecke.length > 0;
+      let gewicht = null;
+      if (hatSack) {
+        const feld = $("#gewicht-" + id);
+        gewicht = parseFloat((feld.value || "").replace(",", "."));
+        if (!gewicht || gewicht <= 0) {
+          info.textContent = "Bitte ein Gewicht über 0 kg eintragen.";
+          info.hidden = false;
+          return;
+        }
+      }
+
+      const betrag = betragBerechnen(b, gewicht || 0);
+
+      btn.disabled = true;
+      info.textContent = "Wird abgerechnet …";
+      info.hidden = false;
+
+      const { data, error } = await sb.functions.invoke("capture-payment", {
+        body: { bestellung_id: id, tatsaechliches_gewicht_kg: gewicht, betrag_cent: betrag }
+      });
+
+      if (error || !data || data.error) {
+        info.textContent = "Fehler: " + (data && data.error ? data.error : (error ? error.message : "unbekannt"));
+        btn.disabled = false;
+        return;
+      }
+
+      b.bezahlt = true;
+      b.abgerechneter_betrag_cent = betrag;
+      b.tatsaechliches_gewicht_kg = gewicht;
+      listeRendern();
     });
   });
 }
