@@ -184,6 +184,35 @@ const eur = cents => eurFmt.format((cents || 0) / 100);
 const datumFmt = iso => new Date(iso).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit", year: "numeric" });
 const zeitpunktFmt = iso => new Date(iso).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 
+// Ruft eine Supabase Edge Function direkt per fetch auf, statt über
+// sb.functions.invoke(): so bekommen wir garantiert die echte Fehlermeldung
+// aus der Antwort zu sehen, statt nur "non-2xx status code".
+async function funktionAufrufen(name, body) {
+  const { data: { session } } = await sb.auth.getSession();
+  const token = session ? session.access_token : CONFIG.supabaseAnonKey;
+
+  let resp;
+  try {
+    resp = await fetch(`${CONFIG.supabaseUrl}/functions/v1/${name}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+        "apikey": CONFIG.supabaseAnonKey
+      },
+      body: JSON.stringify(body)
+    });
+  } catch (_) {
+    throw new Error("Server war nicht erreichbar.");
+  }
+
+  let json = null;
+  try { json = await resp.json(); } catch (_) { /* keine JSON-Antwort */ }
+
+  if (!resp.ok) throw new Error((json && json.error) ? json.error : `Fehler (${resp.status})`);
+  return json;
+}
+
 const STATUS = [
   { id: "neu",              label: "Neu" },
   { id: "abgeholt",         label: "Abgeholt" },
@@ -457,12 +486,10 @@ function listeRendern() {
       info.textContent = "Wird abgerechnet …";
       info.hidden = false;
 
-      const { data, error } = await sb.functions.invoke("capture-payment", {
-        body: { bestellung_id: id, tatsaechliches_gewicht_kg: gewicht, betrag_cent: betrag }
-      });
-
-      if (error || !data || data.error) {
-        info.textContent = "Fehler: " + (data && data.error ? data.error : (error ? error.message : "unbekannt"));
+      try {
+        await funktionAufrufen("capture-payment", { bestellung_id: id, tatsaechliches_gewicht_kg: gewicht, betrag_cent: betrag });
+      } catch (err) {
+        info.textContent = "Fehler: " + err.message;
         btn.disabled = false;
         return;
       }
@@ -486,12 +513,10 @@ function listeRendern() {
       info.textContent = "Wird gesendet …";
       info.hidden = false;
 
-      const { data, error } = await sb.functions.invoke("send-order-email", {
-        body: { bestellung_id: id, typ }
-      });
-
-      if (error || !data || data.error) {
-        info.textContent = "Fehler: " + (data && data.error ? data.error : (error ? error.message : "unbekannt"));
+      try {
+        await funktionAufrufen("send-order-email", { bestellung_id: id, typ });
+      } catch (err) {
+        info.textContent = "Fehler: " + err.message;
         btn.disabled = false;
         return;
       }
