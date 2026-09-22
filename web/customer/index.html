@@ -1208,6 +1208,10 @@ async function bestellungAbschliessen() {
     const { error } = await sb.from("bestellungen").insert({
       user_id: angemeldeterNutzer.id,
       stripe_payment_intent_id: aktuellerPaymentIntentId,
+      preis_pro_kg_cent: CONFIG.preisProKgCent,
+      mindestbetrag_cent: CONFIG.mindestbetragCent,
+      abholgebuehr_cent: CONFIG.abholgebuehrCent,
+      rabatt_prozent: c.rabatt > 0 ? CONFIG.erstbestellungRabattProzent : 0,
       saecke: c.lines.map(x => ({ id: x.s.id, name: x.s.name, anzahl: x.n, max_kg: x.s.maxKg })),
       spezialwaesche: c.spezialLines.map(l => ({ id: l.x.id, name: l.x.name, anzahl: l.n, preis_cent: l.x.preisCent, summe_cent: l.sum })),
       hoechstgewicht_kg: c.kg,
